@@ -82,7 +82,24 @@ data.representatives.push({
   email: 'anna@example.com',
   balance: 18750,
   created_at: '2026-08-01',
-  is_active: 1
+  is_active: 1,
+  is_admin: 0
+});
+
+// Администратор
+const adminHash = Buffer.from('admin123').toString('base64');
+data.representatives.push({
+  id: nextId(data, 'representatives'),
+  computer_number: 'ADMIN',
+  password_hash: adminHash,
+  full_name: 'Администратор',
+  city: 'Москва',
+  phone: '',
+  email: 'admin@burmaldens.ru',
+  balance: 0,
+  created_at: '2026-08-01',
+  is_active: 1,
+  is_admin: 1
 });
 
 // Операции
@@ -132,4 +149,8 @@ console.log('');
 console.log('Демо-аккаунт:');
 console.log('  Компьютерный номер: R123456');
 console.log('  Пароль: 1234');
+console.log('');
+console.log('Админ-панель:');
+console.log('  Логин: ADMIN');
+console.log('  Пароль: admin123');
 console.log('');
