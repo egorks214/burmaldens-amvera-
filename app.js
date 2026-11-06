@@ -51,7 +51,8 @@ async function handleLogin(e) {
       body: JSON.stringify({ computer_number: num, password: pass })
     });
     setUser(data.user);
-    window.location.replace('/cabinet.html');
+    if (data.user.is_admin) window.location.replace('/admin.html');
+    else window.location.replace('/cabinet.html');
   } catch (ex) {
     err.style.display = 'block';
     err.textContent = ex.message;
@@ -138,6 +139,26 @@ function renderProducts(containerId, products) {
 // ========== КАБИНЕТ ==========
 let cart = {};
 let allProducts = [];
+let sectionStack = ['home'];
+let currentSection = 'home';
+
+
+function cabinetGoBack() {
+  // Сначала по стеку разделов кабинета
+  if (sectionStack.length > 1) {
+    sectionStack.pop(); // текущий
+    var prev = sectionStack[sectionStack.length - 1] || 'home';
+    switchSection(prev, false);
+    return;
+  }
+  // Уже на главной кабинета — на публичную главную
+  if (currentSection !== 'home') {
+    switchSection('home', false);
+    sectionStack = ['home'];
+    return;
+  }
+  window.location.href = '/index.html';
+}
 
 function toggleMobileMenu() {
   const sb = document.getElementById('cabinet-sidebar');
@@ -175,11 +196,34 @@ function switchSection(id, pushHist) {
   closeMobileMenu();
   window.scrollTo(0, 0);
 
-  if (pushHist && window.history && window.history.pushState) {
-    const url = '/cabinet.html#sec-' + id;
-    if (location.hash !== '#sec-' + id) {
-      history.pushState({ sec: id }, titles[id] || '', url);
+  // Стек разделов для кнопки «Назад»
+  if (pushHist) {
+    if (currentSection !== id) {
+      sectionStack.push(id);
+      // не раздуваем стек
+      if (sectionStack.length > 20) sectionStack.shift();
     }
+  }
+  currentSection = id;
+
+  // Подсветка нижнего меню
+  document.querySelectorAll('.bottom-nav-item').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-sec') === id);
+  });
+
+  // Кнопка «Назад»: на главной скрываем или ведём на сайт
+  var backBtn = document.getElementById('btn-back');
+  if (backBtn) {
+    backBtn.style.visibility = 'visible';
+  }
+
+  if (pushHist && window.history && window.history.pushState) {
+    try {
+      var url = location.pathname + '#sec-' + id;
+      if (location.hash !== '#sec-' + id) {
+        history.pushState({ sec: id }, titles[id] || '', url);
+      }
+    } catch (e) {}
   }
 
   if (id === 'balance') {
@@ -194,25 +238,44 @@ function switchSection(id, pushHist) {
 }
 
 function initCabinetHistory() {
-  // Стартовая секция из hash или home
-  let start = 'home';
+  var start = 'home';
   if (location.hash && location.hash.indexOf('sec-') === 1) {
     start = location.hash.replace('#sec-', '');
   }
   if (!document.getElementById('sec-' + start)) start = 'home';
 
-  // Заменяем текущую запись истории, чтобы «Назад» не вел на login/register
+  sectionStack = [start];
+  currentSection = start;
+
+  // Три «подушки» в history, чтобы системная «Назад» сначала ходила по кабинету
   if (window.history && history.replaceState) {
-    history.replaceState({ sec: start }, '', '/cabinet.html#sec-' + start);
+    try {
+      var base = location.pathname + location.search;
+      history.replaceState({ sec: 'home', cabinet: 1 }, '', base + '#sec-home');
+      if (start !== 'home') {
+        history.pushState({ sec: start, cabinet: 1 }, '', base + '#sec-' + start);
+      }
+    } catch (e) {}
   }
+
   switchSection(start, false);
 
   window.addEventListener('popstate', function (e) {
-    const sec = (e.state && e.state.sec) || (location.hash.replace('#sec-', '') || 'home');
-    if (document.getElementById('sec-' + sec)) {
-      switchSection(sec, false);
-    } else {
+    if (e.state && e.state.cabinet && e.state.sec && document.getElementById('sec-' + e.state.sec)) {
+      // Синхронизируем стек
+      currentSection = e.state.sec;
+      sectionStack = ['home'];
+      if (e.state.sec !== 'home') sectionStack.push(e.state.sec);
+      switchSection(e.state.sec, false);
+      return;
+    }
+    // Уход «назад» с главной кабинета — остаёмся на home и предлагаем выход кнопкой
+    if (document.body.classList.contains('cabinet-page')) {
       switchSection('home', false);
+      sectionStack = ['home'];
+      try {
+        history.pushState({ sec: 'home', cabinet: 1 }, '', location.pathname + '#sec-home');
+      } catch (err) {}
     }
   });
 }
