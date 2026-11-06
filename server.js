@@ -27,7 +27,7 @@ function sendJSON(res, status, data) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type'
   });
   res.end(body);
@@ -73,7 +73,7 @@ async function handleAPI(req, res, pathname) {
   if (method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
     return res.end();
@@ -107,7 +107,8 @@ async function handleAPI(req, res, pathname) {
       email: email || null,
       balance: 0,
       created_at: new Date().toISOString().slice(0, 10),
-      is_active: 1
+      is_active: 1,
+      is_admin: 0
     };
     data.representatives.push(user);
     save(data);
@@ -130,6 +131,7 @@ async function handleAPI(req, res, pathname) {
       return sendJSON(res, 401, { error: 'Неверный номер или пароль' });
     }
     const { password_hash, ...safe } = user;
+    safe.is_admin = !!user.is_admin;
     return sendJSON(res, 200, { success: true, user: safe });
   }
 
@@ -302,6 +304,113 @@ async function handleAPI(req, res, pathname) {
     return sendJSON(res, 200, { success: true, user: safe, new_balance: rep.balance });
   }
 
+
+  // ===== АДМИН API =====
+  function requireAdmin(data, adminId) {
+    const admin = data.representatives.find(r => r.id === Number(adminId) && r.is_admin && r.is_active);
+    return admin || null;
+  }
+
+  // GET /api/admin/products — все товары (в т.ч. скрытые)
+  if (method === 'GET' && pathname === '/api/admin/products') {
+    const url = new URL(req.url, 'http://localhost');
+    const adminId = url.searchParams.get('admin_id');
+    const data = load();
+    if (!requireAdmin(data, adminId)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    return sendJSON(res, 200, data.products);
+  }
+
+  // POST /api/admin/products — добавить товар
+  if (method === 'POST' && pathname === '/api/admin/products') {
+    const body = await readBody(req);
+    const data = load();
+    if (!requireAdmin(data, body.admin_id)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    if (!body.name || body.price == null) return sendJSON(res, 400, { error: 'Укажите название и цену' });
+    const product = {
+      id: nextId(data, 'products'),
+      category_id: Number(body.category_id) || 1,
+      name: String(body.name).trim(),
+      description: body.description || '',
+      price: Number(body.price),
+      stock: Number(body.stock) || 0,
+      is_new: body.is_new ? 1 : 0,
+      is_active: 1,
+      emoji: body.emoji || '📦'
+    };
+    data.products.push(product);
+    save(data);
+    return sendJSON(res, 200, { success: true, product });
+  }
+
+  // PUT /api/admin/products/:id — обновить / снять с продажи / вернуть
+  const adminProdMatch = pathname.match(/^\/api\/admin\/products\/(\d+)$/);
+  if (method === 'PUT' && adminProdMatch) {
+    const body = await readBody(req);
+    const data = load();
+    if (!requireAdmin(data, body.admin_id)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    const product = data.products.find(p => p.id === Number(adminProdMatch[1]));
+    if (!product) return sendJSON(res, 404, { error: 'Товар не найден' });
+    if (body.name != null) product.name = String(body.name).trim();
+    if (body.description != null) product.description = body.description;
+    if (body.price != null) product.price = Number(body.price);
+    if (body.stock != null) product.stock = Number(body.stock);
+    if (body.category_id != null) product.category_id = Number(body.category_id);
+    if (body.emoji != null) product.emoji = body.emoji;
+    if (body.is_new != null) product.is_new = body.is_new ? 1 : 0;
+    if (body.is_active != null) product.is_active = body.is_active ? 1 : 0;
+    save(data);
+    return sendJSON(res, 200, { success: true, product });
+  }
+
+  // DELETE /api/admin/products/:id — удалить из ассортимента (мягко: is_active=0)
+  if (method === 'DELETE' && adminProdMatch) {
+    const url = new URL(req.url, 'http://localhost');
+    const adminId = url.searchParams.get('admin_id');
+    const data = load();
+    if (!requireAdmin(data, adminId)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    const product = data.products.find(p => p.id === Number(adminProdMatch[1]));
+    if (!product) return sendJSON(res, 404, { error: 'Товар не найден' });
+    product.is_active = 0;
+    save(data);
+    return sendJSON(res, 200, { success: true });
+  }
+
+  // GET /api/admin/users
+  if (method === 'GET' && pathname === '/api/admin/users') {
+    const url = new URL(req.url, 'http://localhost');
+    const adminId = url.searchParams.get('admin_id');
+    const data = load();
+    if (!requireAdmin(data, adminId)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    const users = data.representatives
+      .filter(r => !r.is_admin)
+      .map(({ password_hash, ...u }) => u);
+    return sendJSON(res, 200, users);
+  }
+
+  // PUT /api/admin/users/:id/block — блокировка / разблокировка
+  const adminUserMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/block$/);
+  if (method === 'PUT' && adminUserMatch) {
+    const body = await readBody(req);
+    const data = load();
+    if (!requireAdmin(data, body.admin_id)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    const user = data.representatives.find(r => r.id === Number(adminUserMatch[1]));
+    if (!user) return sendJSON(res, 404, { error: 'Пользователь не найден' });
+    if (user.is_admin) return sendJSON(res, 400, { error: 'Нельзя заблокировать администратора' });
+    user.is_active = body.block ? 0 : 1;
+    save(data);
+    const { password_hash, ...safe } = user;
+    return sendJSON(res, 200, { success: true, user: safe });
+  }
+
+  // GET /api/admin/categories
+  if (method === 'GET' && pathname === '/api/admin/categories') {
+    const url = new URL(req.url, 'http://localhost');
+    const adminId = url.searchParams.get('admin_id');
+    const data = load();
+    if (!requireAdmin(data, adminId)) return sendJSON(res, 403, { error: 'Доступ только для администратора' });
+    return sendJSON(res, 200, data.categories);
+  }
+
   // GET /api/debug/db — содержимое базы для демонстрации
   if (method === 'GET' && pathname === '/api/debug/db') {
     const data = load();
@@ -443,6 +552,29 @@ try {
 } catch (e) {
   console.error('Не удалось инициализировать БД:', e.message);
 }
+
+// Гарантируем наличие админа в БД
+try {
+  const data = load();
+  let changed = false;
+  if (!data.representatives.some(r => r.is_admin)) {
+    data.representatives.push({
+      id: nextId(data, 'representatives'),
+      computer_number: 'ADMIN',
+      password_hash: Buffer.from('admin123').toString('base64'),
+      full_name: 'Администратор',
+      city: 'Москва',
+      phone: '',
+      email: 'admin@burmaldens.ru',
+      balance: 0,
+      created_at: new Date().toISOString().slice(0, 10),
+      is_active: 1,
+      is_admin: 1
+    });
+    changed = true;
+  }
+  if (changed) save(data);
+} catch (e) { console.error('admin seed', e.message); }
 
 console.log('__dirname =', __dirname);
 console.log('PUBLIC    =', PUBLIC);
