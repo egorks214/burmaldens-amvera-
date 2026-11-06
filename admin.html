@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ-панель — БУРМАЛДЭНС</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .admin-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .admin-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .admin-tabs button {
+      border: none; padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      background: #e8e6f0; color: #261B2C; font-weight: 600; font-family: inherit;
+    }
+    .admin-tabs button.active { background: #6661FB; color: #fff; }
+    .admin-panel { display: none; }
+    .admin-panel.active { display: block; }
+    .admin-card {
+      background: #fff; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,.08);
+      padding: 20px; margin-bottom: 20px;
+    }
+    .admin-card h2 { margin: 0 0 16px; color: #261B2C; font-size: 1.15rem; }
+    .admin-form { display: grid; gap: 12px; max-width: 520px; }
+    .admin-form label { font-size: 0.85rem; color: #5a5460; font-weight: 600; }
+    .admin-form input, .admin-form select, .admin-form textarea {
+      width: 100%; padding: 10px 12px; border: 1.5px solid #e8e6f0; border-radius: 10px;
+      font-size: 1rem; font-family: inherit; box-sizing: border-box;
+    }
+    .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge-on { color: #276749; font-weight: 700; }
+    .badge-off { color: #c53030; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    th { background: #f7f6fb; }
+    .btn-danger { background: #c53030; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    .btn-ok { background: #276749; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    .btn-sm { font-size: 0.8rem; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; }
+  </style>
+</head>
+<body class="cabinet-page">
+  <header class="header">
+    <div class="header-inner">
+      <a href="index.html" class="logo">
+        <div class="logo-mark">Б</div>
+        БУРМАЛ<span>ДЭНС</span>
+      </a>
+      <nav class="nav">
+        <span id="admin-name" style="color:#fff;opacity:.85;margin-right:8px"></span>
+        <a href="index.html">На сайт</a>
+        <button class="btn btn-outline btn-sm" onclick="adminLogout()">Выйти</button>
+      </nav>
+    </div>
+  </header>
+
+  <div class="admin-wrap">
+    <h1 style="color:var(--plum);margin:0 0 8px">Админ-панель</h1>
+    <p style="color:var(--text-muted);margin:0 0 20px">Управление товарами и представителями</p>
+
+    <div class="admin-tabs">
+      <button type="button" class="active" data-tab="products" onclick="showTab('products')">Товары</button>
+      <button type="button" data-tab="users" onclick="showTab('users')">Пользователи</button>
+      <button type="button" data-tab="add" onclick="showTab('add')">Добавить товар</button>
+    </div>
+
+    <div class="admin-panel active" id="tab-products">
+      <div class="admin-card">
+        <h2>Ассортимент</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th></th><th>Название</th><th>Цена</th><th>Остаток</th><th>Статус</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="admin-products"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-panel" id="tab-users">
+      <div class="admin-card">
+        <h2>Представители</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Номер</th><th>ФИО</th><th>Город</th><th>Баланс</th><th>Статус</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="admin-users"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-panel" id="tab-add">
+      <div class="admin-card">
+        <h2>Новый товар</h2>
+        <form class="admin-form" onsubmit="addProduct(event)">
+          <div>
+            <label>Название *</label>
+            <input id="p-name" required placeholder="Например: Крем дневной">
+          </div>
+          <div>
+            <label>Описание</label>
+            <textarea id="p-desc" rows="2"></textarea>
+          </div>
+          <div>
+            <label>Цена, ₽ *</label>
+            <input id="p-price" type="number" min="1" step="1" required value="1000">
+          </div>
+          <div>
+            <label>Остаток на складе</label>
+            <input id="p-stock" type="number" min="0" value="50">
+          </div>
+          <div>
+            <label>Категория</label>
+            <select id="p-cat">
+              <option value="1">Парфюмерия</option>
+              <option value="2">Уход</option>
+              <option value="3">Декор</option>
+            </select>
+          </div>
+          <div>
+            <label>Эмодзи</label>
+            <input id="p-emoji" value="📦" maxlength="4">
+          </div>
+          <div>
+            <label><input type="checkbox" id="p-new"> Новинка</label>
+          </div>
+          <button type="submit" class="btn btn-primary">Добавить в ассортимент</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    function getAdmin() {
+      const raw = sessionStorage.getItem('burmaldens_user');
+      if (!raw) return null;
+      const u = JSON.parse(raw);
+      return u && u.is_admin ? u : null;
+    }
+    function adminLogout() {
+      sessionStorage.removeItem('burmaldens_user');
+      location.replace('/login.html');
+    }
+    async function api(url, options = {}) {
+      const res = await fetch(API + url, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка');
+      return data;
+    }
+    function showTab(id) {
+      document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.admin-tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+      document.getElementById('tab-' + id).classList.add('active');
+    }
+    async function loadProducts() {
+      const admin = getAdmin();
+      const list = await api('/api/admin/products?admin_id=' + admin.id);
+      const tb = document.getElementById('admin-products');
+      tb.innerHTML = list.map(p => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.emoji || ''}</td>
+          <td>${p.name}</td>
+          <td>${Number(p.price).toLocaleString('ru-RU')} ₽</td>
+          <td>${p.stock}</td>
+          <td class="${p.is_active ? 'badge-on' : 'badge-off'}">${p.is_active ? 'В продаже' : 'Скрыт'}</td>
+          <td class="row-actions">
+            ${p.is_active
+              ? `<button class="btn-danger btn-sm" onclick="setProductActive(${p.id}, false)">Убрать</button>`
+              : `<button class="btn-ok btn-sm" onclick="setProductActive(${p.id}, true)">Вернуть</button>`}
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="7">Нет товаров</td></tr>';
+    }
+    async function loadUsers() {
+      const admin = getAdmin();
+      const list = await api('/api/admin/users?admin_id=' + admin.id);
+      const tb = document.getElementById('admin-users');
+      tb.innerHTML = list.map(u => `
+        <tr>
+          <td>${u.id}</td>
+          <td>${u.computer_number}</td>
+          <td>${u.full_name}</td>
+          <td>${u.city || '—'}</td>
+          <td>${Number(u.balance).toLocaleString('ru-RU')} ₽</td>
+          <td class="${u.is_active ? 'badge-on' : 'badge-off'}">${u.is_active ? 'Активен' : 'Заблокирован'}</td>
+          <td>
+            ${u.is_active
+              ? `<button class="btn-danger btn-sm" onclick="blockUser(${u.id}, true)">Заблокировать</button>`
+              : `<button class="btn-ok btn-sm" onclick="blockUser(${u.id}, false)">Разблокировать</button>`}
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="7">Нет пользователей</td></tr>';
+    }
+    async function setProductActive(id, active) {
+      const admin = getAdmin();
+      await api('/api/admin/products/' + id, {
+        method: 'PUT',
+        body: JSON.stringify({ admin_id: admin.id, is_active: active })
+      });
+      await loadProducts();
+    }
+    async function blockUser(id, block) {
+      const admin = getAdmin();
+      await api('/api/admin/users/' + id + '/block', {
+        method: 'PUT',
+        body: JSON.stringify({ admin_id: admin.id, block })
+      });
+      await loadUsers();
+    }
+    async function addProduct(e) {
+      e.preventDefault();
+      const admin = getAdmin();
+      try {
+        await api('/api/admin/products', {
+          method: 'POST',
+          body: JSON.stringify({
+            admin_id: admin.id,
+            name: document.getElementById('p-name').value.trim(),
+            description: document.getElementById('p-desc').value.trim(),
+            price: Number(document.getElementById('p-price').value),
+            stock: Number(document.getElementById('p-stock').value),
+            category_id: Number(document.getElementById('p-cat').value),
+            emoji: document.getElementById('p-emoji').value.trim() || '📦',
+            is_new: document.getElementById('p-new').checked
+          })
+        });
+        alert('Товар добавлен');
+        document.getElementById('p-name').value = '';
+        showTab('products');
+        await loadProducts();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const admin = getAdmin();
+      if (!admin) {
+        location.replace('/login.html');
+        return;
+      }
+      document.getElementById('admin-name').textContent = admin.full_name || 'Админ';
+      try {
+        await loadProducts();
+        await loadUsers();
+      } catch (e) {
+        alert(e.message);
+        if (String(e.message).includes('администратора')) adminLogout();
+      }
+    });
+  </script>
+</body>
+</html>
